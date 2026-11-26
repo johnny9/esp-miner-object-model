@@ -1,0 +1,1258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP-Miner — Object Model</title>
+<style>
+:root{
+  --bg:#f8fafc;--surface:#ffffff;--surface-alt:#f1f5f9;--border:#e2e8f0;--border-strong:#cbd5e1;
+  --text:#0f172a;--muted:#475569;--subtle:#64748b;--accent:#f7931a;--accent-soft:#fff7ed;--accent-border:#fed7aa;
+  --code-bg:#0f172a;--code-fg:#e2e8f0;
+  --role-surface:#2563eb;--role-task:#7c3aed;--role-contract:#0d9488;--role-state:#059669;
+  --role-driver:#d97706;--role-infra:#db2777;--role-hw:#dc2626;
+  --shadow:0 1px 2px rgba(15,23,42,.05),0 1px 3px rgba(15,23,42,.04);
+  --radius:10px;--font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+}
+[data-theme="dark"]{
+  --bg:#0b1120;--surface:#111827;--surface-alt:#1e293b;--border:#1f2937;--border-strong:#334155;
+  --text:#f1f5f9;--muted:#cbd5e1;--subtle:#94a3b8;--accent:#f7931a;--accent-soft:#2a1d0f;--accent-border:#7c2d12;
+  --code-bg:#020617;--code-fg:#e2e8f0;
+  --role-surface:#60a5fa;--role-task:#a78bfa;--role-contract:#2dd4bf;--role-state:#34d399;
+  --role-driver:#fbbf24;--role-infra:#f472b6;--role-hw:#f87171;
+  --shadow:0 1px 3px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 var(--font);-webkit-font-smoothing:antialiased}
+a{color:var(--role-surface);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font:12.8px/1.45 var(--mono);background:var(--surface-alt);border:1px solid var(--border);padding:1px 5px;border-radius:5px}
+pre{margin:0;background:var(--code-bg);color:var(--code-fg);padding:16px 18px;border-radius:var(--radius);overflow:auto;font:12.5px/1.55 var(--mono)}
+pre code{background:none;border:none;padding:0;color:inherit;font-size:inherit}
+
+/* Layout */
+.shell{display:grid;grid-template-columns:258px minmax(0,1fr);min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;overflow-y:auto;padding:22px 16px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;gap:16px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-dot{width:30px;height:30px;border-radius:8px;background:var(--accent);color:#fff;font-weight:800;display:grid;place-items:center;font-size:15px;flex:none}
+.brand-title{font-weight:700;font-size:14.5px;line-height:1.25}
+.brand-sub{font-size:12px;color:var(--subtle)}
+
+/* Project Switcher */
+.proj-switch{display:grid;grid-template-columns:1fr;gap:5px;padding:6px;background:var(--surface-alt);border:1px solid var(--border);border-radius:10px}
+.proj-btn{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border-radius:7px;border:1px solid transparent;background:transparent;color:var(--muted);font:600 13px var(--font);text-align:left;transition:all .12s}
+.proj-btn:hover{background:var(--surface);color:var(--text)}
+.proj-btn.active{background:var(--surface);color:var(--text);border-color:var(--accent);box-shadow:var(--shadow)}
+.proj-btn .tag{font:600 10.5px var(--mono);color:var(--subtle);background:var(--surface-alt);border:1px solid var(--border);padding:1px 6px;border-radius:999px}
+.proj-btn.active .tag{color:var(--accent);background:var(--accent-soft);border-color:var(--accent-border)}
+
+.nav{display:flex;flex-direction:column;gap:3px}
+.nav-group{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--subtle);margin:12px 8px 4px}
+.nav a{padding:6px 10px;border-radius:7px;color:var(--muted);font-size:13.3px;font-weight:500;display:block}
+.nav a:hover{background:var(--surface-alt);color:var(--text);text-decoration:none}
+.nav a.active{background:var(--accent-soft);color:var(--text);font-weight:600;border-left:3px solid var(--accent);padding-left:7px}
+.sidebar-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;font-size:11.8px;color:var(--subtle)}
+.theme-btn{cursor:pointer;background:var(--surface-alt);color:var(--text);border:1px solid var(--border-strong);border-radius:7px;padding:7px 10px;font:600 12.5px var(--font);text-align:left}
+.theme-btn:hover{border-color:var(--accent)}
+
+.main{padding:36px clamp(20px,4vw,56px) 84px;max-width:1220px;width:100%}
+.project-view{display:none}
+.project-view.active{display:block}
+
+header.hero{padding-bottom:26px;border-bottom:1px solid var(--border);margin-bottom:34px}
+.eyebrow-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px}
+.eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border);padding:3px 10px;border-radius:999px}
+.commit-pill{font:600 11.5px var(--mono);color:var(--subtle);background:var(--surface);border:1px solid var(--border-strong);padding:3px 9px;border-radius:999px}
+h1{margin:0 0 10px;font-size:clamp(26px,3.2vw,34px);line-height:1.18;letter-spacing:-.02em}
+.lead{margin:0;max-width:84ch;color:var(--muted);font-size:15.8px}
+.pillars{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:20px}
+.pillar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:13px 15px;box-shadow:var(--shadow)}
+.pillar strong{display:block;font-size:13.5px;margin-bottom:3px}
+.pillar span{font-size:12.5px;color:var(--muted)}
+
+section{margin-top:48px;scroll-margin-top:24px}
+h2{margin:0 0 8px;font-size:22px;letter-spacing:-.015em;display:flex;align-items:center;gap:10px}
+h2 .num{font:700 12px var(--mono);color:var(--accent);background:var(--accent-soft);border:1px solid var(--accent-border);padding:2px 7px;border-radius:6px}
+h3{margin:24px 0 8px;font-size:16px}
+.section-desc{margin:0 0 18px;color:var(--muted);max-width:84ch}
+
+/* Role badges */
+.badge{display:inline-flex;align-items:center;gap:5px;font:600 11.5px var(--font);padding:2px 8px;border-radius:999px;border:1px solid transparent;white-space:nowrap}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.b-surface{color:var(--role-surface);background:color-mix(in srgb,var(--role-surface) 11%,transparent);border-color:color-mix(in srgb,var(--role-surface) 28%,transparent)}
+.b-task{color:var(--role-task);background:color-mix(in srgb,var(--role-task) 11%,transparent);border-color:color-mix(in srgb,var(--role-task) 28%,transparent)}
+.b-contract{color:var(--role-contract);background:color-mix(in srgb,var(--role-contract) 11%,transparent);border-color:color-mix(in srgb,var(--role-contract) 28%,transparent)}
+.b-state{color:var(--role-state);background:color-mix(in srgb,var(--role-state) 11%,transparent);border-color:color-mix(in srgb,var(--role-state) 28%,transparent)}
+.b-driver{color:var(--role-driver);background:color-mix(in srgb,var(--role-driver) 11%,transparent);border-color:color-mix(in srgb,var(--role-driver) 28%,transparent)}
+.b-infra{color:var(--role-infra);background:color-mix(in srgb,var(--role-infra) 11%,transparent);border-color:color-mix(in srgb,var(--role-infra) 28%,transparent)}
+.b-hw{color:var(--role-hw);background:color-mix(in srgb,var(--role-hw) 11%,transparent);border-color:color-mix(in srgb,var(--role-hw) 28%,transparent)}
+.scope-pill{font:600 11px var(--mono);color:var(--subtle);background:var(--surface-alt);border:1px solid var(--border);padding:1px 7px;border-radius:5px;text-transform:uppercase;white-space:nowrap}
+
+/* Cards & Grids */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.rule-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow)}
+.rule-card h4{margin:0 0 6px;font-size:14px}
+.rule-card p{margin:0;font-size:13.2px;color:var(--muted)}
+
+/* Tables */
+.table-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:13.4px}
+th{text-align:left;padding:10px 14px;background:var(--surface-alt);color:var(--subtle);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:color-mix(in srgb,var(--surface-alt) 60%,transparent)}
+
+/* Nested Ownership Diagram */
+.own-root{background:var(--surface);border:2px solid var(--border-strong);border-radius:12px;padding:18px;box-shadow:var(--shadow)}
+.own-hdr{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+.own-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;flex-wrap:wrap}
+.own-meta{font-size:12px;color:var(--subtle)}
+.own-order{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;font:600 11.5px var(--mono);color:var(--subtle);background:var(--surface-alt);border:1px solid var(--border);border-radius:7px;padding:6px 12px;margin-bottom:14px}
+.own-stack{display:flex;flex-direction:column;gap:12px}
+.own-box{border:1px solid var(--border-strong);border-left:4px solid var(--border-strong);border-radius:9px;padding:13px 15px;background:color-mix(in srgb,var(--surface-alt) 42%,var(--surface))}
+.own-box.hw{border-left-color:var(--role-hw)}
+.own-box.infra{border-left-color:var(--role-infra)}
+.own-box.state{border-left-color:var(--role-state)}
+.own-box.surface{border-left-color:var(--role-surface)}
+.own-box.task{border-left-color:var(--role-task)}
+.own-box.driver{border-left-color:var(--role-driver)}
+.own-box.contract{border-left-color:var(--role-contract)}
+.own-subgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(225px,1fr));gap:10px;margin-top:10px}
+.own-leaf{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:9px 11px;font-size:12.8px}
+.own-leaf strong{display:block;font-size:13px;margin-bottom:2px}
+.own-leaf span{color:var(--muted)}
+
+/* Tabs & Mermaid Panels */
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.tab{cursor:pointer;background:var(--surface);color:var(--muted);border:1px solid var(--border-strong);border-radius:8px;padding:7px 12px;font:600 12.8px var(--font);transition:all .12s}
+.tab:hover{color:var(--text);border-color:var(--accent)}
+.tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.panel.active{display:block}
+.panel-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.panel-head h3{margin:0;font-size:16px}
+.panel-head p{margin:0;font-size:13px;color:var(--muted)}
+.diagram-box{overflow-x:auto;padding:10px 4px;min-height:150px}
+.diagram-box svg{max-width:100%;height:auto;display:block;margin:0 auto}
+.panel-notes{margin:14px 0 0;padding:12px 16px;background:var(--surface-alt);border-radius:8px;font-size:13px;color:var(--muted)}
+.panel-notes ul{margin:6px 0 0;padding-left:18px}
+.panel-notes li{margin:4px 0}
+
+/* Catalog Filter Bar */
+.filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.search-input{flex:1 1 240px;padding:8px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:13.5px var(--font)}
+.search-input:focus{outline:2px solid color-mix(in srgb,var(--accent) 40%,transparent);border-color:var(--accent)}
+.select-input{padding:8px 10px;border-radius:8px;border:1px solid var(--border-strong);background:var(--surface);color:var(--text);font:13px var(--font)}
+.count-pill{font:600 12px var(--mono);color:var(--subtle);margin-left:auto}
+
+.callout{background:var(--accent-soft);border:1px solid var(--accent-border);border-radius:var(--radius);padding:13px 16px;font-size:13.5px;margin-top:16px}
+.callout strong{color:var(--text)}
+
+@media(max-width:960px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:static;height:auto;border-right:none;border-bottom:1px solid var(--border);padding:16px}
+  .proj-switch{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .nav{flex-direction:row;flex-wrap:wrap}
+  .nav-group,.sidebar-foot{display:none}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-dot">₿</div>
+      <div>
+        <div class="brand-title">ESP-Miner Object Model</div>
+        <div class="brand-sub">Bitaxe Firmware Architecture</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="sideNav">
+      <div class="nav-group">Model</div>
+      <a href="#esp-roles">1. Roles &amp; Ownership Rules</a>
+      <a href="#esp-ownership">2. Ownership &amp; Hardware Boundary</a>
+      <a href="#esp-execution">3. Execution &amp; Slot Contracts</a>
+      <div class="nav-group">Firmware Areas (7 Views)</div>
+      <a href="#esp-features">4. Subsystem Relationships</a>
+      <a href="#esp-sequences">5. Failover &amp; Power Sequences</a>
+      <div class="nav-group">Reference</div>
+      <a href="#esp-catalog">6. Complete Module Directory</a>
+    </nav>
+
+    <div class="sidebar-foot">
+      <button class="theme-btn" id="themeToggle" type="button">Switch to Dark Theme</button>
+      <div>Embedded C / FreeRTOS architecture up to ESP-IDF &amp; hardware buses (<code>4db592d</code>).</div>
+      <div>Sibling model: <a href="https://johnny9.dev/mujina-object-model/">Mujina Object Model</a></div>
+    </div>
+  </aside>
+
+  <main class="main">
+<header class="hero">
+        <div class="eyebrow-row">
+          <span class="eyebrow">Architecture Reference · Embedded C / FreeRTOS (ESP-IDF)</span>
+          <span class="commit-pill">bitaxeorg/ESP-Miner · master @ 4db592d</span>
+        </div>
+        <h1>ESP-Miner Object Model</h1>
+        <p class="lead">
+          Complete runtime architecture of upstream <code>ESP-Miner</code>—covering the static <code>GlobalState</code> root, pinned FreeRTOS task hierarchy, Stratum V1/V2 Noise supervision, BM13xx ASIC pipeline, board-driven power/thermal control, and external AxeOS/Display/BAP surfaces down to the ESP-IDF &amp; hardware boundary.
+        </p>
+        <div class="pillars">
+          <div class="pillar"><strong>Shared <code>GlobalState</code> Root</strong><span>One static <code>GlobalState</code> in <code>main.c</code> passed by pointer to every task, HTTP handler, LVGL screen, and BAP service.</span></div>
+          <div class="pillar"><strong>Priority-Tiered FreeRTOS Tasks</strong><span>Mining hot path runs at prio <code>20/16/15</code> (<code>create_jobs</code>, <code>stratum</code>, <code>ASIC_result</code>); power/fan at <code>10/8</code>; telemetry/UI at <code>1–7</code>.</span></div>
+          <div class="pillar"><strong>Table-Driven Board Dispatch</strong><span><code>DeviceConfig → FamilyConfig → AsicConfig</code> selects BM1366/68/70/73/97, TPS546/DS4432U/INA260, and EMC2101/2103/2302/TMP1075.</span></div>
+          <div class="pillar"><strong>Fixed Slots &amp; PSRAM Offload</strong><span>Pre-allocated <code>miner_job_pool_t</code> (8 slots/pool) + mutex-guarded <code>asic_job_store_t</code>; large stacks, coinbase buffers, cJSON &amp; logs live in PSRAM.</span></div>
+        </div>
+      </header>
+
+      <!-- ESP 01 -->
+      <section id="esp-roles">
+        <h2><span class="num">01</span> Roles, Scopes &amp; Ownership Rules</h2>
+        <p class="section-desc">
+          <strong>Role</strong> describes what a module or task does in the firmware. <strong>Scope</strong> (<code>system</code>, <code>pool</code>, <code>job</code>, <code>board</code>) describes its lifetime and reset boundary.
+        </p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Role</th><th>Responsibility</th><th>Module / Naming Pattern</th><th>Examples</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="badge b-surface">Surface</span></td>
+                <td>External operator &amp; accessory interfaces: REST/WS API for AxeOS, LVGL OLED/LCD UI, BAP UART protocol, BLE provisioning.</td>
+                <td><code>http_server/*</code>, <code>screen.c</code>, <code>bap/*</code>, <code>setup_ble.c</code></td>
+                <td><code>http_server</code>, <code>websocket_api_task</code>, <code>websocket_log_task</code>, <code>screen.c</code>, <code>bap_handlers</code>, <code>setup_ble</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-task">Task</span></td>
+                <td>Long-lived FreeRTOS execution loops spawned in <code>app_main</code> or on demand (fallback Stratum, self-test, BAP, NVS).</td>
+                <td><code>*_task</code> in <code>main/tasks/</code></td>
+                <td><code>create_jobs_task</code>, <code>stratum_task</code> (+ <code>stratum_fb</code>), <code>ASIC_result_task</code>, <code>POWER_MANAGEMENT_task</code>, <code>FAN_CONTROLLER_task</code>, <code>hashrate_monitor_task</code>, <code>statistics_task</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-contract">Contract</span></td>
+                <td>Dispatch facades &amp; wire-agnostic data types isolating tasks from specific ASIC silicon, power/thermal ICs, or Stratum version.</td>
+                <td><code>stratum_driver_t</code>, <code>ASIC_*</code>, <code>Power_*</code>, <code>Thermal_*</code>, <code>*_job_t</code></td>
+                <td><code>stratum_driver_t</code>, <code>ASIC_*</code> (<code>asic.c</code>), <code>VCORE_*</code>, <code>Power_*</code>, <code>Thermal_*</code>, <code>miner_job_t</code>, <code>asic_job_t</code>, <code>task_result</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-state">State</span></td>
+                <td>Shared runtime structs embedded in static <code>GlobalState</code> plus bounded pools/rings read across tasks and UI endpoints.</td>
+                <td><code>*Module</code>, <code>PoolSession</code>, <code>*_store_t</code></td>
+                <td><code>GlobalState</code>, <code>SystemModule</code>, <code>PoolConfig[8]</code>, <code>PoolSession[8]</code>, <code>asic_job_store_t</code>, <code>PowerManagementModule</code>, <code>HashrateMonitorModule</code>, <code>Scoreboard</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-driver">Driver</span></td>
+                <td>Protocol state machines &amp; chip-specific register/packet drivers implementing contracts for concrete silicon and Stratum specs.</td>
+                <td><code>bm13*.c</code>, <code>stratum_v*_client.c</code>, chip ICs</td>
+                <td><code>bm1397</code>, <code>bm1366</code>, <code>bm1368</code>, <code>bm1370</code>, <code>bm1373</code>, <code>stratum_v1_client</code>, <code>stratum_v2_client</code>, <code>sv2_noise</code>, <code>TPS546</code>, <code>INA260</code>, <code>DS4432U</code>, <code>EMC2101/2103/2302</code>, <code>TMP1075</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-infra">Infra</span></td>
+                <td>Platform services: NVS async writer, Wi-Fi STA/AP/mDNS/SNTP, captive-portal DNS, I2C bus lock, UART serial, ring log buffer.</td>
+                <td><code>components/{connect,dns_server}</code>, <code>nvs_config.c</code></td>
+                <td><code>nvs_config</code> (<code>nvs_task</code>), <code>connect.c</code>, <code>dns_server</code>, <code>i2c_bitaxe</code>, <code>serial.c</code>, <code>log_buffer</code>, <code>filesystem</code>, <code>task_monitor</code></td>
+              </tr>
+              <tr>
+                <td><span class="badge b-hw">Hardware</span></td>
+                <td>Physical buses &amp; ESP-IDF SDK boundaries: UART1 ASIC chain, I2C0 PMBus/thermal bus, GPIO/ADC, LwIP sockets/TLS, Flash/PSRAM.</td>
+                <td>ESP-IDF drivers &amp; pins in <code>device_pins.h</code></td>
+                <td><code>UART_NUM_1</code>, <code>I2C_NUM_0</code>, <code>GPIO/ADC</code>, <code>esp_transport</code> (TCP/TLS), <code>esp_wifi</code>, <code>esp_ota_ops</code>, <code>NVS/SPIFFS</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>Three Core Architectural Patterns</h3>
+        <div class="grid-3">
+          <div class="rule-card">
+            <h4>1. Mining Hot Path (Task Notify + Fixed Slots)</h4>
+            <p><code>stratum_task</code> writes parsed templates into <code>PoolSession.job_pool</code> (8 slots) and wakes <code>create_jobs_task</code> via <code>xTaskNotify</code> carrying <code>(pool_idx, slot)</code>. <code>ASIC_send_job</code> claims an <code>asic_job_store_t</code> slot; <code>ASIC_result_task</code> decodes UART1 frames, verifies SHA-256 PoW, and calls <code>stratum_submit_share</code> directly.</p>
+          </div>
+          <div class="rule-card">
+            <h4>2. Board-Capability Dispatch</h4>
+            <p><code>device_config_init()</code> resolves board version from NVS/efuse into <code>DeviceConfig</code> (pins, family, ASIC, IC presence bitfields). Shared facades (<code>ASIC_*</code>, <code>VCORE_*</code>, <code>Power_*</code>, <code>Thermal_*</code>) switch on those flags so tasks stay board-agnostic.</p>
+          </div>
+          <div class="rule-card">
+            <h4>3. Shared-Memory Snapshot Telemetry</h4>
+            <p><code>POWER_MANAGEMENT_task</code>, <code>FAN_CONTROLLER_task</code>, <code>hashrate_monitor_task</code>, and <code>statistics_task</code> update fields in <code>GlobalState</code>; <code>http_server</code>, <code>websocket_api_task</code>, <code>screen.c</code>, and <code>BAP</code> read snapshots without duplicating models.</p>
+          </div>
+        </div>
+
+        <h3>State Authority &amp; Synchronization Map</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>State</th><th>Primary Writer(s)</th><th>Synchronization &amp; Lifetime Rule</th></tr></thead>
+            <tbody>
+              <tr><td>Active ASIC jobs (<code>job_store</code>)</td><td><code>create_jobs_task</code> (claim) · <code>ASIC_result_task</code> (lookup) · <code>ASIC_clear_work</code></td><td><span class="badge b-state">Mutex</span> <code>asic_job_store_t.lock</code> (<code>pthread_mutex_t</code>) copies an immutable <code>asic_job_t</code> snapshot on lookup so later slot reuse cannot corrupt in-flight verification.</td></tr>
+              <tr><td>Stratum V1 / V2 live connections</td><td><code>stratum_task</code> / <code>stratum_fb</code> (open/close) · <code>ASIC_result_task</code> (submit) · HTTP (abort)</td><td><span class="badge b-driver">Protocol Mutex</span> <code>s_v1_conn_mutex</code> and <code>s_v2_conn_mutex</code> guard <code>s_v1_conns[8]</code> / <code>s_v2_conns[8]</code>, active job ID ring, send UID/seq, and timing slot writes.</td></tr>
+              <tr><td>Pool job ring (<code>PoolSession.job_pool</code>)</td><td><code>stratum_v1_client</code> / <code>stratum_v2_client</code> (producer) · <code>create_jobs_task</code> (consumer)</td><td><span class="badge b-task">Slot Ring + Notify</span> 8 pre-allocated <code>miner_job_t</code> slots per pool with PSRAM coinbase buffers; <code>POOL_encode_job_notification</code> passes <code>pool_idx</code> + <code>slot</code> via <code>xTaskNotify</code>.</td></tr>
+              <tr><td>ASIC power / reset / <code>ASIC_initalized</code></td><td><code>app_main</code> (cold boot) · <code>POWER_MANAGEMENT_task</code> (pause/fault/overheat/recovery)</td><td><span class="badge b-task">Flag + Cooldown</span> <code>mining_stop()</code> ramps to 50 MHz, cuts <code>VCORE</code>, holds reset low, sets <code>ASIC_initalized = false</code>, delays 500 ms, flushes <code>UART_NUM_1</code>.</td></tr>
+              <tr><td>I2C bus (power, thermal, OLED)</td><td><code>POWER_MANAGEMENT_task</code>, <code>FAN_CONTROLLER_task</code>, <code>screen.c</code></td><td><span class="badge b-infra">ESP-IDF I2C Master</span> Shared <code>i2c_master_bus_handle_t</code> in <code>i2c_bitaxe.c</code> serializes device transactions across sensors, VRM, and display.</td></tr>
+              <tr><td>NVS configuration persistence</td><td>HTTP/BAP/BLE config handlers → <code>nvs_task</code></td><td><span class="badge b-infra">Async Queue</span> Dedicated <code>nvs_task</code> (prio 4) serializes NVS flash writes off caller tasks; <code>nvs_config.c</code> serves reads.</td></tr>
+              <tr><td>Telemetry fields in <code>SystemModule</code> / <code>PowerManagementModule</code></td><td>Various tasks → HTTP, WS, LVGL, BAP readers</td><td><span class="badge b-surface">Lock-Free Snapshots</span> Read directly from <code>GlobalState</code> (except <code>Scoreboard</code> &amp; <code>SelfTestNonceMeasurement</code> which have dedicated mutexes).</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ESP 02 -->
+      <section id="esp-ownership">
+        <h2><span class="num">02</span> Ownership Tree, FreeRTOS Tasks &amp; Hardware Boundary</h2>
+        <p class="section-desc">
+          <code>app_main()</code> initializes hardware, NVS, network, and peripherals in strict sequence, populates static <code>GLOBAL_STATE</code>, and spawns long-lived FreeRTOS tasks (many with PSRAM stacks via <code>xTaskCreateWithCaps</code>).
+        </p>
+
+        <div class="own-root">
+          <div class="own-hdr">
+            <div class="own-title"><span class="badge b-task">Boot Root</span> <code>app_main()</code> &amp; static <code>GlobalState GLOBAL_STATE</code> <span class="scope-pill">firmware lifetime</span></div>
+            <div class="own-meta"><code>main/main.c</code> · registers <code>heap_alloc_failed_hook</code> (aborts on PSRAM OOM) &amp; cJSON PSRAM hooks</div>
+          </div>
+          <div class="own-order">
+            <span>↓ BOOT INITIALIZATION ORDER (TOP TO BOTTOM)</span>
+            <span>● STEADY STATE: NO FULL SHUTDOWN — PAUSE/RECOVERY VIA POWER_MANAGEMENT OR esp_restart()</span>
+          </div>
+
+          <div class="own-stack">
+            <div class="own-box infra">
+              <div class="own-hdr" style="margin-bottom:4px">
+                <div class="own-title"><span class="badge b-infra">Platform &amp; Early Boot</span> NVS, OTA Verify, Reset Hold, I2C/ADC, Wi-Fi / BLE / SNTP</div>
+                <div class="own-meta">Runs before ASIC probe · OTA image marked valid before peripheral/ASIC qualification</div>
+              </div>
+              <div class="own-subgrid">
+                <div class="own-leaf"><strong>Early Hardware Guards</strong><span><code>asic_hold_reset_low()</code>, <code>ADC_init()</code>, <code>nvs_config_init()</code> (<code>nvs_task</code> prio 4), <code>device_config_init()</code>, <code>i2c_bitaxe_init()</code></span></div>
+                <div class="own-leaf"><strong>Diagnostics &amp; Buffers</strong><span><code>log_buffer_init()</code> (<code>stdout_flush</code> prio 1), <code>cpu_monitor_task</code> (prio 1, PSRAM), optional <code>task_monitor_task</code> (prio 1)</span></div>
+                <div class="own-leaf"><strong>Connectivity &amp; Time</strong><span><code>wifi_init()</code> (STA + Config AP + <code>mdns_init</code> prio 5 + <code>dns_server</code> prio 5), <code>setup_ble</code> (5s AP grace), <code>esp_netif_sntp</code> → <code>sv2_noise_set_clock_trusted(true)</code></span></div>
+              </div>
+            </div>
+
+            <div class="own-box state">
+              <div class="own-hdr" style="margin-bottom:4px">
+                <div class="own-title"><span class="badge b-state">Shared Data Root</span> <code>GlobalState</code> Sub-Modules <span class="scope-pill">system</span></div>
+                <div class="own-meta">Zero-initialized static BSS + PSRAM-allocated job/coinbase/log buffers</div>
+              </div>
+              <div class="own-subgrid">
+                <div class="own-leaf"><strong><code>DEVICE_CONFIG</code> &amp; <code>DISPLAY_CONFIG</code></strong><span>Board version, <code>FamilyConfig</code>, <code>AsicConfig</code>, <code>DevicePins</code>, IC presence flags, OLED/LCD settings</span></div>
+                <div class="own-leaf"><strong><code>SYSTEM_MODULE</code></strong><span>Hashrate windows, Wi-Fi/IP/mDNS, <code>pools[MAX_POOLS=8]</code>, <code>pool_sessions[8]</code> (each owns <code>miner_job_pool_t</code> &amp; <code>stratum_timing_tracker_t</code>), <code>Scoreboard</code>, pause/fault/overheat flags</span></div>
+                <div class="own-leaf"><strong><code>job_store</code> (<code>asic_job_store_t</code>)</strong><span>Mutex-protected ring of active <code>asic_job_t</code> snapshots indexed by ASIC hardware job ID</span></div>
+                <div class="own-leaf"><strong><code>POWER_MANAGEMENT_MODULE</code>, <code>HASHRATE_MONITOR_MODULE</code> &amp; <code>SELF_TEST_MODULE</code></strong><span>Live V/I/W/temp/fan/freq telemetry, per-domain register counters, factory self-test state</span></div>
+              </div>
+            </div>
+
+            <div class="own-box task">
+              <div class="own-hdr" style="margin-bottom:4px">
+                <div class="own-title"><span class="badge b-task">Active FreeRTOS Tasks</span> Priority-Tiered Concurrency</div>
+                <div class="own-meta">Mining hot path in internal DRAM (8 KB); Stratum/UI/stats stacks in PSRAM (8–16 KB)</div>
+              </div>
+              <div class="own-subgrid">
+                <div class="own-leaf"><strong>Mining Core (Prio 20 / 16 / 15)</strong><span><code>create_jobs_task</code> (prio 20, DRAM), <code>stratum_task</code> + dynamic <code>stratum_fb</code> (prio 16, 16 KB PSRAM), <code>ASIC_result_task</code> (prio 15, DRAM)</span></div>
+                <div class="own-leaf"><strong>Power, Thermal &amp; ASIC Health (Prio 10 / 8 / 7)</strong><span><code>POWER_MANAGEMENT_task</code> (prio 10, DRAM), <code>FAN_CONTROLLER_task</code> (prio 8, DRAM), <code>hashrate_monitor_task</code> (prio 7, PSRAM), or <code>self_test_task</code> (prio 10)</span></div>
+                <div class="own-leaf"><strong>External Surfaces &amp; Stats (Prio 2–5)</strong><span><code>httpd</code> (ESP-IDF), <code>ws_api_task</code> &amp; <code>ws_log_task</code> (prio 2, PSRAM), <code>statistics_task</code> (prio 3, PSRAM), LVGL port task (<code>screen.c</code>), BAP UART RX/mode/sub tasks</span></div>
+              </div>
+            </div>
+
+            <div class="own-box driver">
+              <div class="own-hdr" style="margin-bottom:4px">
+                <div class="own-title"><span class="badge b-driver">Protocol &amp; Hardware Drivers</span> Behind Dispatch Facades</div>
+                <div class="own-meta">Selected at runtime from <code>PoolConfig.protocol</code> and <code>DeviceConfig</code></div>
+              </div>
+              <div class="own-subgrid">
+                <div class="own-leaf"><strong>Stratum Drivers</strong><span><code>g_stratum_v1_driver</code> (<code>stratum_v1_client</code> + <code>stratum_api</code> + <code>yyjson</code>) &amp; <code>g_stratum_v2_driver</code> (<code>stratum_v2_client</code> + <code>sv2_protocol</code> + <code>sv2_noise</code> + <code>libsecp256k1</code>)</span></div>
+                <div class="own-leaf"><strong>ASIC Silicon Drivers</strong><span><code>BM1397</code>, <code>BM1366</code>, <code>BM1368</code>, <code>BM1370</code>, <code>BM1373</code> + <code>bm_job_packet</code>, <code>bm_job_midstate</code>, <code>pll</code>, <code>crc</code>, <code>frequency_transition_bmXX</code></span></div>
+                <div class="own-leaf"><strong>Power &amp; Thermal ICs</strong><span><code>TPS546</code> (PMBus VRM), <code>INA260</code>, <code>DS4432U</code>, <code>EMC2101</code>, <code>EMC2103</code>, <code>EMC2302</code>, <code>TMP1075</code>, <code>PID</code></span></div>
+              </div>
+            </div>
+
+            <div class="own-box hw">
+              <div class="own-hdr" style="margin-bottom:4px">
+                <div class="own-title"><span class="badge b-hw">Hardware &amp; ESP-IDF Boundary</span> Physical Buses &amp; OS Primitives</div>
+                <div class="own-meta">Firmware stops at ESP-IDF HAL, LwIP, and board pin definitions</div>
+              </div>
+              <div class="own-subgrid">
+                <div class="own-leaf"><strong><code>UART_NUM_1</code> &amp; BAP UART</strong><span>High-speed ASIC TX/RX frames (up to max baud) and accessory UART link</span></div>
+                <div class="own-leaf"><strong><code>I2C_NUM_0</code>, GPIO &amp; ADC</strong><span>PMBus regulator, fan/temp ICs, OLED/LCD display, ASIC reset/enable, input buttons, Vcore ADC</span></div>
+                <div class="own-leaf"><strong>LwIP / <code>esp_transport</code> / BLE</strong><span>TCP, mbedTLS (V1 TLS), Noise NX (V2), HTTP/WS server, Wi-Fi STA/AP, NimBLE provisioning</span></div>
+                <div class="own-leaf"><strong>Flash &amp; PSRAM</strong><span>NVS key-value store, SPIFFS (AxeOS/custom WWW), dual OTA app partitions, external SPIRAM</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <h3>ESP-IDF &amp; Hardware Boundary Summary</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Hardware / SDK Interface</th><th>Firmware Owner</th><th>Primary Callers</th><th>Access / Fault Policy</th></tr></thead>
+            <tbody>
+              <tr><td><code>UART_NUM_1</code> (<code>serial.c</code>)</td><td><code>asic_init.c</code> / <code>serial.c</code></td><td><code>create_jobs_task</code> (TX), <code>ASIC_result_task</code> (RX), <code>hashrate_monitor_task</code> (reg poll), <code>POWER_MANAGEMENT_task</code> (freq/flush)</td><td>Gated by <code>ASIC_initalized</code>; flushed after 500 ms settle on <code>mining_stop()</code>.</td></tr>
+              <tr><td><code>I2C_NUM_0</code> (<code>i2c_bitaxe.c</code>)</td><td><code>app_main</code> → <code>i2c_bitaxe</code></td><td><code>TPS546</code>, <code>INA260</code>, <code>DS4432U</code>, <code>EMC2101/2103/2302</code>, <code>TMP1075</code>, OLED display</td><td>Serialized by ESP-IDF I2C master bus; failure during boot enters degraded mode (API stays up, no ASIC tasks).</td></tr>
+              <tr><td><code>esp_transport</code> + LwIP sockets</td><td><code>stratum_v1_client</code> / <code>stratum_v2_client</code></td><td><code>stratum_task</code> (RX loop), <code>ASIC_result_task</code> (TX share), HTTP (abort via <code>shutdown(SHUT_RDWR)</code>)</td><td>Per-protocol mutex (<code>s_v1_conn_mutex</code> / <code>s_v2_conn_mutex</code>) guards connection pointer &amp; TX serialization.</td></tr>
+              <tr><td>PSRAM (<code>MALLOC_CAP_SPIRAM</code>)</td><td><code>app_main</code></td><td><code>cJSON</code> hooks, <code>miner_job_pool_t</code> coinbase buffers, <code>log_buffer</code>, PSRAM task stacks</td><td><code>heap_alloc_failed_hook</code> immediately calls <code>abort()</code> on any PSRAM allocation failure.</td></tr>
+              <tr><td>NVS &amp; OTA partitions</td><td><code>nvs_config.c</code> / <code>http_server.c</code></td><td><code>app_main</code>, HTTP REST handlers, BAP, BLE setup</td><td>Writes queued to <code>nvs_task</code>; OTA marks running partition valid early in <code>app_main</code>.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ESP 03 -->
+      <section id="esp-execution">
+        <h2><span class="num">03</span> Execution, Notification &amp; Slot Contracts</h2>
+        <p class="section-desc">
+          The mining hot path avoids heap allocation and dynamic task creation by combining a protocol vtable, FreeRTOS direct-to-task notifications, and fixed-size job rings.
+        </p>
+
+        <div class="grid-2">
+          <div class="card">
+            <h3 style="margin-top:0">Core C Contracts (<code>stratum_driver.h</code>, <code>pool.h</code>, <code>asic_job_slot.h</code>)</h3>
+            <pre><code>// Protocol-polymorphic Stratum driver vtable (V1 JSON-RPC &amp; V2 Noise)
+typedef struct stratum_driver {
+    stratum_protocol_t protocol;
+    const char *name;
+    esp_err_t (*run)(GlobalState *gs, uint16_t pool_idx);
+    void (*close_connection)(GlobalState *gs, uint16_t pool_idx);
+    void (*abort_connection)(uint16_t pool_idx);
+    int  (*submit_share)(GlobalState *gs, const asic_job_t *job,
+                         uint32_t nonce, uint32_t rolled_version,
+                         uint64_t *sent_time_us);
+} stratum_driver_t;
+
+// Direct-to-task notification payload: stratum_task -&gt; create_jobs_task
+#define POOL_JOB_NOTIFY_FLAG (1UL &lt;&lt; 30)
+static inline uint32_t POOL_encode_job_notification(uint16_t pool_idx, uint8_t slot) {
+    return POOL_JOB_NOTIFY_FLAG | (((uint32_t)(pool_idx &amp; 0xFF)) &lt;&lt; 8)
+                                | ((uint32_t)(slot % MINER_JOB_POOL_SIZE));
+}
+
+// Mutex-guarded ASIC hardware job slot ring (copy-out snapshot semantics)
+typedef struct asic_job_store {
+    asic_job_slot_entry_t *entries;
+    uint16_t capacity;
+    uint16_t current_slot;
+    pthread_mutex_t lock;
+} asic_job_store_t;
+uint16_t asic_job_store_claim(asic_job_store_t *store, const asic_job_t *job);
+bool     asic_job_store_lookup(asic_job_store_t *store, uint16_t slot, asic_job_t *out_job);</code></pre>
+          </div>
+
+          <div class="card">
+            <h3 style="margin-top:0">Key Runtime Invariants (Verified at <code>4db592d</code>)</h3>
+            <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:13.4px">
+              <li style="margin-bottom:8px"><strong>Submit timing recorded before socket write (#2085):</strong> Both V1 and V2 clients call <code>POOL_timing_record(gs, pool_idx, uid, now)</code> <em>before</em> writing to the transport and clear the slot on write failure, preventing a fast pool reply on RX from racing ahead of TX timestamping.</li>
+              <li style="margin-bottom:8px"><strong>Active-pool share gating:</strong> <code>stratum_submit_share()</code> checks <code>active_job-&gt;pool_id == active_pool_idx</code> and each protocol driver checks its bounded <code>active_job_ids</code> ring under <code>s_v{1,2}_conn_mutex</code> before writing to the socket.</li>
+              <li style="margin-bottom:8px"><strong>Copy-out ASIC job snapshots:</strong> <code>ASIC_process_work()</code> resolves the chip's job ID through <code>asic_job_store_lookup()</code> into <code>task_result.job</code> so later slot reuse by <code>create_jobs_task</code> cannot mutate the job under verification.</li>
+              <li style="margin-bottom:8px"><strong>Clean-job preemption vs. non-clean throttling:</strong> <code>create_jobs_task</code> wakes immediately on <code>clean_jobs=true</code> or <code>CREATE_JOBS_NOTIFY_CLEAR_WORK</code>, while non-clean updates respect <code>MIN_JOB_RUNTIME_MS (1000 ms)</code> so rapid pool refreshes don't thrash ASIC pipelines.</li>
+              <li style="margin-bottom:8px"><strong>Two-worker primary/fallback Stratum supervision:</strong> Primary task stays resident forever; fallback task (<code>stratum_fb</code>) is dynamically spawned after 3 primary failures (or forced fallback) and calls <code>vTaskDelete(NULL)</code> once primary delivers fresh work and hands over.</li>
+              <li><strong>Graceful degraded boot:</strong> If <code>SYSTEM_init_peripherals()</code> fails, <code>app_main</code> skips power/fan/ASIC tasks but still starts AxeOS HTTP server &amp; Wi-Fi so the user can inspect faults or reflash.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ESP 04 -->
+      <section id="esp-features">
+        <h2><span class="num">04</span> Subsystem Relationships (7 Firmware Areas)</h2>
+        <p class="section-desc">
+          Each major subsystem of <code>ESP-Miner</code> arranged left-to-right from <strong>External Surface / Task</strong> through <strong>Contracts &amp; State</strong> to <strong>Drivers &amp; Hardware</strong>.
+        </p>
+
+        <div class="tabs" data-tabgroup="esp-features">
+          <button class="tab active" data-target="esp-feat-boot" type="button">1. Boot &amp; Degraded Mode</button>
+          <button class="tab" data-target="esp-feat-stratum" type="button">2. Stratum V1/V2 Supervision</button>
+          <button class="tab" data-target="esp-feat-pipeline" type="button">3. Job &amp; Nonce Pipeline</button>
+          <button class="tab" data-target="esp-feat-asic" type="button">4. ASIC Drivers &amp; Hashrate</button>
+          <button class="tab" data-target="esp-feat-power" type="button">5. Power, Thermal &amp; Fan</button>
+          <button class="tab" data-target="esp-feat-http" type="button">6. AxeOS HTTP / WS / NVS</button>
+          <button class="tab" data-target="esp-feat-io" type="button">7. Display, BAP &amp; Wi-Fi/BLE</button>
+        </div>
+
+        <!-- ESP 4.1 -->
+        <div class="panel active" id="esp-feat-boot">
+          <div class="panel-head">
+            <h3>1. Boot Sequence, Board Resolution &amp; Degraded Mode</h3>
+            <p><code>app_main()</code> holds ASIC reset low, validates OTA, resolves <code>DeviceConfig</code>, brings up Wi-Fi/SNTP, probes ASICs, and dispatches runtime tasks.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Entry["Boot Composition Root"]
+    MAIN["app_main()&lt;br/&gt;(+ heap_alloc_failed_hook,&lt;br/&gt;cJSON PSRAM hooks)"]
+    OTA["esp_ota_mark_app_valid&lt;br/&gt;+ firmware migration"]
+  end
+
+  subgraph Config["Board &amp; Platform Init"]
+    NVS["nvs_config_init()&lt;br/&gt;(nvs_task prio 4)"]
+    DEV["device_config_init()&lt;br/&gt;DeviceConfig / FamilyConfig / AsicConfig"]
+    SYS["SYSTEM_init_system()&lt;br/&gt;+ SYSTEM_init_peripherals()"]
+    NET["wifi_init() + setup_ble&lt;br/&gt;+ esp_netif_sntp (clock_trusted)"]
+  end
+
+  subgraph Dispatch["Runtime Dispatch"]
+    ASICINIT["asic_initialize()&lt;br/&gt;(COLD_BOOT)"]
+    MINING["Mining Tasks&lt;br/&gt;(create_jobs, ASIC_result,&lt;br/&gt;hashrate_monitor, statistics)"]
+    STRAT["stratum_task (prio 16)"]
+    SELF["self_test_task (prio 10)&lt;br/&gt;(factory / test mode)"]
+    DEGR["Degraded Mode&lt;br/&gt;(AxeOS HTTP + BAP stay up)"]
+  end
+
+  MAIN --> OTA
+  MAIN --> NVS
+  NVS --> DEV
+  DEV --> SYS
+  SYS --> NET
+  NET --> ASICINIT
+  ASICINIT --> MINING
+  NET --> STRAT
+  SYS -. peripheral fail .-> DEGR
+  ASICINIT -. self_test active .-> SELF
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Key boot guarantees:</strong>
+            <ul>
+              <li><code>asic_hold_reset_low()</code> runs before NVS and I2C init to keep ASIC power draw minimal during early boot.</li>
+              <li>SNTP callback <code>on_ntp_sync()</code> calls <code>sv2_noise_set_clock_trusted(true)</code> so Stratum V2 Noise certificates validate against a trusted clock.</li>
+              <li>When <code>SELF_TEST_MODULE.is_active</code> is true, Wi-Fi/HTTP/Stratum are bypassed and <code>self_test_task</code> runs hardware qualification directly.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.2 -->
+        <div class="panel" id="esp-feat-stratum">
+          <div class="panel-head">
+            <h3>2. Multi-Pool Stratum V1 &amp; V2 Supervision</h3>
+            <p>Primary &amp; dynamic fallback tasks supervise up to <code>MAX_POOLS (8)</code> configs through a uniform <code>stratum_driver_t</code> vtable.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Control["Pool Supervisor (stratum_task.c)"]
+    PRIM["stratum_task (Primary)&lt;br/&gt;prio 16 · 16 KB PSRAM"]
+    FALL["stratum_fb (Fallback)&lt;br/&gt;spawned on demand · exits on recovery"]
+    HTTP["HTTP / BAP Config Changes&lt;br/&gt;stratum_notify_pool_modified()"]
+  end
+
+  subgraph Contract["Dispatch &amp; Session State"]
+    VTABLE["stratum_driver_t&lt;br/&gt;(run, close, abort, submit_share)"]
+    SESS["PoolSession[MAX_POOLS=8]&lt;br/&gt;miner_job_pool_t (8 slots)&lt;br/&gt;stratum_timing_tracker_t"]
+  end
+
+  subgraph Drivers["Protocol Clients &amp; Crypto"]
+    V1["stratum_v1_client.c&lt;br/&gt;(s_v1_conn_mutex + stratum_api + yyjson)"]
+    V2["stratum_v2_client.c&lt;br/&gt;(s_v2_conn_mutex + sv2_protocol)"]
+    NOISE["sv2_noise.c&lt;br/&gt;(Noise NX + libsecp256k1)"]
+  end
+
+  subgraph Transport["Socket / TLS Boundary"]
+    SOCK["stratum_socket.c&lt;br/&gt;esp_transport (TCP / mbedTLS)"]
+  end
+
+  HTTP --> PRIM
+  HTTP --> FALL
+  PRIM --> VTABLE
+  FALL --> VTABLE
+  VTABLE --> V1
+  VTABLE --> V2
+  V2 --> NOISE
+  V1 --> SESS
+  V2 --> SESS
+  V1 --> SOCK
+  NOISE --> SOCK
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Key pool supervision rules:</strong>
+            <ul>
+              <li>Primary retries 3 times (2 s delay), then activates fallback (<code>stratum_fb</code>) and probes primary every 30 s (<code>RECOVERY_PROBE_INTERVAL_MS</code>).</li>
+              <li><code>stratum_check_primary_handover()</code> only switches back once primary actually receives usable work, aborting and resetting the fallback session.</li>
+              <li><code>stratum_v1_client</code> supports plaintext &amp; bundled/custom TLS; <code>stratum_v2_client</code> supports SV2 Standard &amp; Extended channels over Noise NX.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.3 -->
+        <div class="panel" id="esp-feat-pipeline">
+          <div class="panel-head">
+            <h3>3. Mining Job, Extranonce Rolling &amp; Nonce Verification Pipeline</h3>
+            <p>Zero-allocation hot path from pool template to UART1 ASIC packet, SHA-256 verification, share submission, and scoreboard recording.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Pool["Pool Producer"]
+    RX["stratum_v1/v2 RX&lt;br/&gt;writes miner_job_t slot"]
+    POOL["PoolSession.job_pool&lt;br/&gt;(8 slots + PSRAM coinbase)"]
+  end
+
+  subgraph Sched["Job Builder (prio 20)"]
+    CJ["create_jobs_task&lt;br/&gt;xTaskNotifyWait(pool_idx, slot)&lt;br/&gt;rolls extranonce2 &amp; SW version"]
+    BUILD["mining_build_asic_job()&lt;br/&gt;+ coinbase_decoder"]
+  end
+
+  subgraph Store["Hardware Bridge"]
+    SLOT["asic_job_store_t&lt;br/&gt;(pthread_mutex_t ring)"]
+    UART["ASIC_send_job() / ASIC_process_work()&lt;br/&gt;UART_NUM_1"]
+  end
+
+  subgraph Result["Result Verifier (prio 15)"]
+    AR["ASIC_result_task&lt;br/&gt;mining_nonce_hash()&lt;br/&gt;pool_target &amp; network_target"]
+    SUB["stratum_submit_share()&lt;br/&gt;+ POOL_timing_record()"]
+    SCORE["Scoreboard + SystemModule&lt;br/&gt;best_diff / block_found"]
+    HRM["hashrate_monitor_register_read()"]
+  end
+
+  RX --> POOL
+  POOL -. xTaskNotify .-> CJ
+  CJ --> BUILD
+  BUILD --> SLOT
+  SLOT --> UART
+  UART --> AR
+  SLOT -. copy-out snapshot .-> AR
+  AR -. share or block .-> SUB
+  AR --> SCORE
+  AR -. register frame .-> HRM
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Hot-path ordering:</strong>
+            <ul>
+              <li><code>ASIC_result_task</code> prioritizes share/block submission <em>before</em> computing floating-point difficulty, updating <code>Scoreboard</code>, or logging.</li>
+              <li>Register read responses arriving on the same UART RX stream are routed directly to <code>hashrate_monitor_register_read()</code> and bypass PoW verification.</li>
+              <li><code>create_jobs_task</code> decodes coinbase height/signals lazily on the first send via <code>SYSTEM_decode_and_apply_coinbase()</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.4 -->
+        <div class="panel" id="esp-feat-asic">
+          <div class="panel-head">
+            <h3>4. ASIC Dispatch, Silicon Drivers &amp; Hashrate Monitor</h3>
+            <p><code>asic.c</code> dispatches uniformly to five Bitmain chip generations while sharing packet encoding, PLL math, and smooth frequency ramping.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Callers["Firmware Callers"]
+    CJT["create_jobs_task"]
+    ART["ASIC_result_task"]
+    PMT["POWER_MANAGEMENT_task"]
+    HRMT["hashrate_monitor_task (prio 7)"]
+  end
+
+  subgraph Facade["ASIC Facade (components/asic)"]
+    ASIC["asic.c&lt;br/&gt;ASIC_init / send_job / process_work /&lt;br/&gt;set_frequency / read_registers"]
+    COMMON["asic_common.c + bm_job_packet.c&lt;br/&gt;+ bm_job_midstate.c + pll.c + crc.c"]
+    FREQ["frequency_transition_bmXX.c&lt;br/&gt;(stepped ramp)"]
+  end
+
+  subgraph Chips["Chip-Specific Drivers"]
+    B97["bm1397.c (4 midstates)"]
+    B66["bm1366.c (4 domains)"]
+    B68["bm1368.c (4 domains)"]
+    B70["bm1370.c (4 domains)"]
+    B73["bm1373.c (8 domains)"]
+  end
+
+  subgraph Bus["Serial Boundary"]
+    SER["serial.c (UART_NUM_1)&lt;br/&gt;+ asic_reset.c (GPIO)"]
+  end
+
+  CJT --> ASIC
+  ART --> ASIC
+  PMT --> ASIC
+  HRMT --> ASIC
+  ASIC --> FREQ
+  ASIC --> B97
+  ASIC --> B66
+  ASIC --> B68
+  ASIC --> B70
+  ASIC --> B73
+  B97 --> COMMON
+  B66 --> COMMON
+  B68 --> COMMON
+  B70 --> COMMON
+  B73 --> COMMON
+  COMMON --> SER
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Silicon abstraction:</strong>
+            <ul>
+              <li><code>AsicConfig</code> carries chip ID, core/small-core counts, hash domains (1, 4, or 8), <code>hw_version_mask</code>, <code>packet_midstates</code> (4 for BM1397, 1 for BM1366/68/70/73), and init retry policy.</li>
+              <li><code>hashrate_monitor_task</code> periodically invokes <code>ASIC_read_registers()</code>; responses flow back through <code>ASIC_result_task</code> into per-domain 1m/10m/1h hashrate windows.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.5 -->
+        <div class="panel" id="esp-feat-power">
+          <div class="panel-head">
+            <h3>5. Power Management, Thermal Sensing &amp; PID Fan Control</h3>
+            <p>Hardware-flag facades insulate <code>POWER_MANAGEMENT_task</code> and <code>FAN_CONTROLLER_task</code> from board-specific VRM and fan ICs.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Tasks["Control Tasks"]
+    PM["POWER_MANAGEMENT_task (prio 10)&lt;br/&gt;100 ms loop · overheat/voltage/pause"]
+    FC["FAN_CONTROLLER_task (prio 8)&lt;br/&gt;PID &amp; manual fan control"]
+  end
+
+  subgraph Facades["Hardware Facades"]
+    PWR["power.c (Power_get_output / vreg_temp)"]
+    VC["vcore.c (VCORE_set / get_voltage_mv)"]
+    TH["thermal.c (Thermal_get_chip_temp / set_fan)"]
+    PID["PID.c (closed-loop controller)"]
+  end
+
+  subgraph Drivers["I2C / ADC Chip Drivers"]
+    TPS["TPS546.c (PMBus VRM)"]
+    INA["INA260.c (power monitor)"]
+    DS["DS4432U.c (Vcore DAC)"]
+    EMC["EMC2101 / EMC2103 / EMC2302"]
+    TMP["TMP1075.c (temp sensor)"]
+    ADC["adc.c (ESP32 Vcore ADC)"]
+  end
+
+  subgraph Bus["Bus Boundary"]
+    I2C["i2c_bitaxe.c (I2C_NUM_0)"]
+    RST["asic_reset.c + GPIO asic_enable"]
+  end
+
+  PM --> PWR
+  PM --> VC
+  PM --> TH
+  PM --> RST
+  FC --> TH
+  FC --> PID
+  PWR --> TPS
+  PWR --> INA
+  VC --> TPS
+  VC --> DS
+  VC --> ADC
+  TH --> EMC
+  TH --> TMP
+  TPS --> I2C
+  INA --> I2C
+  DS --> I2C
+  EMC --> I2C
+  TMP --> I2C
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Safety &amp; pause orchestration:</strong>
+            <ul>
+              <li><code>POWER_MANAGEMENT_task</code> enforces thermal ceilings (<code>MAX_TEMP = 90°C</code>, <code>TPS546_MAX_TEMP = 145°C</code>), input undervoltage throttling, and user-pause / hardware-fault / all-pools-unavailable stop/recovery.</li>
+              <li><code>TPS546_CONFIG_*</code> profiles (Default, Hex, GammaTurbo, NajaDuo, GammaHex) are selected directly from <code>FamilyConfig.tps546_config</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.6 -->
+        <div class="panel" id="esp-feat-http">
+          <div class="panel-head">
+            <h3>6. AxeOS Web UI, REST/WebSocket API, OTA &amp; NVS Config</h3>
+            <p>ESP-IDF HTTP server serves the embedded Angular AxeOS SPA, REST endpoints, live telemetry/log WebSockets, and OTA flashing.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Client["Browser / External Clients"]
+    AXE["AxeOS SPA (Angular)&lt;br/&gt;served from SPIFFS / embedded"]
+    API["REST &amp; WebSocket Clients"]
+  end
+
+  subgraph Server["HTTP &amp; WebSocket Layer"]
+    HTTPD["http_server.c (esp_http_server)&lt;br/&gt;REST + OTA + SPIFFS WWW"]
+    JSON["system_api_json.c + theme_api.c&lt;br/&gt;(cJSON in PSRAM)"]
+    WSAPI["websocket_api_task (prio 2)"]
+    WSLOG["websocket_log_task (prio 2)"]
+  end
+
+  subgraph State["Firmware State &amp; Persistence"]
+    GS["GlobalState&lt;br/&gt;(SystemModule, Power, Pools, Scoreboard)"]
+    NVS["nvs_config.c&lt;br/&gt;nvs_task (prio 4 async writer)"]
+    LOG["log_buffer.c&lt;br/&gt;(PSRAM ring + stdout_flush)"]
+    OTA["esp_ota_ops + filesystem.c"]
+  end
+
+  AXE --> HTTPD
+  API --> HTTPD
+  API --> WSAPI
+  API --> WSLOG
+  HTTPD --> JSON
+  HTTPD --> OTA
+  JSON --> GS
+  JSON --> NVS
+  HTTPD -. pool change .-> GS
+  WSAPI --> GS
+  WSLOG --> LOG
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>API &amp; persistence details:</strong>
+            <ul>
+              <li>Config PATCH handlers persist settings through <code>nvs_config.c</code> (async <code>nvs_task</code>) and trigger live pool reconfiguration via <code>stratum_notify_pool_modified()</code> or <code>stratum_notify_pool_selection_changed()</code>.</li>
+              <li><code>log_buffer.c</code> intercepts ESP-IDF logs into a PSRAM ring buffer fanned out to both UART stdout and <code>websocket_log_task</code>.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- ESP 4.7 -->
+        <div class="panel" id="esp-feat-io">
+          <div class="panel-head">
+            <h3>7. Display (LVGL), Buttons, BAP UART &amp; Wi-Fi/BLE Provisioning</h3>
+            <p>On-device UI, Bitaxe Accessory Protocol (BAP), and initial onboarding share <code>GlobalState</code> while owning dedicated I/O tasks.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+flowchart LR
+  subgraph Display["On-Device Display &amp; Input"]
+    SCR["screen.c (LVGL 12-screen carousel)&lt;br/&gt;500 ms refresh"]
+    DISP["display.c (OLED / Color LCD)"]
+    INP["input.c (button wake / actions)"]
+  end
+
+  subgraph BAP["Bitaxe Accessory Protocol (main/bap)"]
+    BAPI["bap.c (send queue + mutexes)"]
+    BUART["bap_uart.c (RX/TX tasks)"]
+    BPROTO["bap_protocol.c + bap_handlers.c"]
+    BSUB["bap_subscription.c (push tasks)"]
+  end
+
+  subgraph Net["Connectivity &amp; Onboarding"]
+    CONN["connect.c (STA + Config AP + mDNS)"]
+    DNS["dns_server.c (captive portal, prio 5)"]
+    BLE["setup_ble.c (NimBLE, 5s AP grace)"]
+  end
+
+  subgraph Core["Shared Root"]
+    GS["GlobalState + nvs_config"]
+  end
+
+  SCR --> DISP
+  INP --> SCR
+  SCR --> GS
+  BUART --> BPROTO
+  BPROTO --> BAPI
+  BSUB --> BAPI
+  BPROTO --> GS
+  BSUB --> GS
+  CONN --> DNS
+  CONN --> GS
+  BLE --> GS
+            </div>
+          </div>
+          <div class="panel-notes">
+            <strong>Isolation notes:</strong>
+            <ul>
+              <li><code>setup_ble_start()</code> only activates after 5 s in AP setup mode and is torn down via <code>setup_ble_stop()</code> as soon as station Wi-Fi connects, freeing radio RAM.</li>
+              <li>BAP uses a PSRAM send queue (<code>bap_uart_send_queue</code>) and separate <code>bap_uart_send_mutex</code> / <code>bap_subscription_mutex</code> locks; disabled automatically when <code>DEVICE_CONFIG.pins.bap == NULL</code>.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ESP 05 -->
+      <section id="esp-sequences">
+        <h2><span class="num">05</span> Concurrency, Failover &amp; Power-Cycle Sequences</h2>
+        <p class="section-desc">
+          Runtime interactions across FreeRTOS tasks, shared rings, mutexes, and hardware buses.
+        </p>
+
+        <div class="tabs" data-tabgroup="esp-sequences">
+          <button class="tab active" data-target="esp-seq-boot" type="button">Boot &amp; Cold Start</button>
+          <button class="tab" data-target="esp-seq-share" type="button">Job → ASIC → Share Submit</button>
+          <button class="tab" data-target="esp-seq-failover" type="button">Primary Failover &amp; Recovery</button>
+          <button class="tab" data-target="esp-seq-power" type="button">Pause / Fault Stop &amp; Recovery</button>
+        </div>
+
+        <div class="panel active" id="esp-seq-boot">
+          <div class="panel-head">
+            <h3>Boot &amp; Cold-Start Sequence (<code>app_main</code>)</h3>
+            <p>Hardware safety first (reset low), OTA confirmation, Wi-Fi/BLE/SNTP readiness, then ASIC probe and task creation.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+sequenceDiagram
+  participant Main as app_main()
+  participant HW as Reset / ADC / I2C / NVS
+  participant Net as Wi-Fi / BLE / SNTP
+  participant ASIC as asic_initialize()
+  participant Tasks as FreeRTOS Workers
+
+  Main-&gt;&gt;HW: register PSRAM abort hook + cJSON PSRAM hooks
+  Main-&gt;&gt;HW: asic_hold_reset_low() · ADC_init() · nvs_config_init()
+  Main-&gt;&gt;HW: esp_ota_mark_app_valid_cancel_rollback()
+  Main-&gt;&gt;HW: device_config_init() · i2c_bitaxe_init()
+  Main-&gt;&gt;HW: SYSTEM_init_system() · SYSTEM_init_peripherals()
+  alt Peripherals OK
+    Main-&gt;&gt;Tasks: spawn POWER_MANAGEMENT_task (10) &amp; FAN_CONTROLLER_task (8)
+  else Peripheral Init Failed
+    Note over Main,Tasks: Degraded mode: skip power/fan/ASIC tasks, keep HTTP + Wi-Fi
+  end
+  Main-&gt;&gt;Tasks: start_rest_server() · BAP_init()
+  Main-&gt;&gt;Net: wait is_connected (start setup_ble after 5s AP grace)
+  Net--&gt;&gt;Main: Wi-Fi connected → setup_ble_stop()
+  Main-&gt;&gt;Net: esp_netif_sntp_sync_wait() (up to ~32s)
+  Net--&gt;&gt;Main: on_ntp_sync() → sv2_noise_set_clock_trusted(true)
+  Main-&gt;&gt;ASIC: asic_initialize(COLD_BOOT)
+  ASIC--&gt;&gt;Main: chip_count &gt; 0, ASIC_initalized = true
+  Main-&gt;&gt;Tasks: spawn create_jobs (20), ASIC_result (15), hashrate (7), stats (3), stratum (16)
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="esp-seq-share">
+          <div class="panel-head">
+            <h3>Pool Job Arrival → ASIC Hashing → Share Submission</h3>
+            <p>Shows direct task notification, mutex-guarded slot copy-out, and pre-write submit timestamping (<code>#2085</code>).</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+sequenceDiagram
+  participant Pool as Stratum Pool (V1/V2)
+  participant ST as stratum_task (prio 16)
+  participant CJ as create_jobs_task (prio 20)
+  participant Slot as asic_job_store_t
+  participant UART as UART1 / BM13xx
+  participant AR as ASIC_result_task (prio 15)
+
+  Pool-&gt;&gt;ST: mining.notify / NewMiningJob
+  ST-&gt;&gt;ST: fill PoolSession.job_pool[slot], add_active_job_id()
+  ST-&gt;&gt;CJ: xTaskNotify(POOL_encode_job_notification(pool_idx, slot))
+  CJ-&gt;&gt;CJ: POOL_resolve_notified_job() · mining_build_asic_job()
+  CJ-&gt;&gt;Slot: asic_job_store_claim(job) [under lock]
+  CJ-&gt;&gt;UART: ASIC_send_job() (bm_job_packet TX)
+  UART--&gt;&gt;AR: Nonce frame RX
+  AR-&gt;&gt;Slot: asic_job_store_lookup(job_id) → copy asic_job_t [under lock]
+  AR-&gt;&gt;AR: mining_nonce_hash() · check pool_target &amp; network_target
+  AR-&gt;&gt;ST: stratum_submit_share() [acquires s_v1/v2_conn_mutex]
+  Note over AR,Pool: POOL_timing_record(uid, now) BEFORE socket write (#2085)
+  AR-&gt;&gt;Pool: write share packet (clears timing slot on write error)
+  AR-&gt;&gt;AR: SYSTEM_notify_found_nonce() · scoreboard_add()
+  Pool--&gt;&gt;ST: share accept/reject reply
+  ST-&gt;&gt;ST: POOL_timing_calculate_ms(uid) · POOL_notify_accepted/rejected
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="esp-seq-failover">
+          <div class="panel-head">
+            <h3>Primary Pool Failover &amp; Automatic Recovery Handover</h3>
+            <p><code>stratum_task</code> spawns a second worker (<code>stratum_fb</code>) on fallback and cleanly terminates it once primary delivers work again.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+sequenceDiagram
+  participant Prim as stratum_task (Primary)
+  participant FB as stratum_fb (Fallback)
+  participant GS as GlobalState / PoolSession
+  participant CJ as create_jobs_task
+
+  Prim-&gt;&gt;Prim: run_pool_session(primary) fails 3x (2s backoff)
+  Prim-&gt;&gt;GS: is_using_fallback = true
+  Prim-&gt;&gt;FB: xTaskCreateWithCaps("stratum_fb", prio 16)
+  par Fallback mines actively
+    FB-&gt;&gt;GS: run_pool_session(secondary) → writes job_pool
+    FB-&gt;&gt;CJ: xTaskNotify(secondary_idx, slot)
+  and Primary probes every 30s
+    Prim-&gt;&gt;Prim: ulTaskNotifyTake(30s) → probe primary pool
+    Prim-&gt;&gt;GS: primary receives valid work → stratum_check_primary_handover()
+  end
+  Prim-&gt;&gt;FB: stratum_abort_pool(secondary) + POOL_reset_session(secondary)
+  Prim-&gt;&gt;GS: is_using_fallback = false
+  Prim-&gt;&gt;CJ: xTaskNotify(primary_idx, slot)
+  FB-&gt;&gt;FB: sees !is_using_fallback &amp;&amp; !use_fallback_stratum → vTaskDelete(NULL)
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" id="esp-seq-power">
+          <div class="panel-head">
+            <h3>Pause / Hardware Fault / Pool-Unavailable Stop &amp; Recovery</h3>
+            <p><code>POWER_MANAGEMENT_task</code> owns silicon power-down and cold-recovery re-initialization.</p>
+          </div>
+          <div class="diagram-box">
+            <div class="mermaid" data-diagram>
+sequenceDiagram
+  participant Trig as User / Overheat / Pool Supervisor
+  participant PM as POWER_MANAGEMENT_task (prio 10)
+  participant ASIC as ASIC / VCORE / Reset / UART1
+  participant Work as create_jobs &amp; ASIC_result
+
+  Trig-&gt;&gt;PM: sets mining_paused / hardware_fault / pools_unavailable
+  PM-&gt;&gt;ASIC: ASIC_set_frequency(50 MHz) · ASIC_set_nonce_space()
+  PM-&gt;&gt;ASIC: VCORE_set_voltage(0.0 V) · asic_hold_reset_low()
+  PM-&gt;&gt;Work: ASIC_initalized = false
+  Note over PM,Work: Wait 500 ms for in-flight UART I/O to settle
+  PM-&gt;&gt;ASIC: uart_flush(UART_NUM_1) · delay 100 ms
+  Note over PM: Stays powered down while condition persists
+  Trig--&gt;&gt;PM: pause / fault cleared &amp; pool available
+  PM-&gt;&gt;ASIC: VCORE_set_voltage(NVS mV) · delay 500 ms · uart_flush()
+  PM-&gt;&gt;ASIC: asic_initialize(ASIC_INIT_RECOVERY, 2000 ms stabilize)
+  ASIC--&gt;&gt;Work: ASIC_initalized = true → mining resumes
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ESP 06 -->
+      <section id="esp-catalog">
+        <h2><span class="num">06</span> Complete ESP-Miner Module, Task &amp; Object Directory</h2>
+        <p class="section-desc">
+          Source-verified components across <code>main/</code> and <code>components/</code> at <code>bitaxeorg/ESP-Miner @ 4db592d</code>. Filter by area, role, scope, or keyword.
+        </p>
+
+        <div class="filters">
+          <input class="search-input" id="espCatSearch" type="search" placeholder="Search symbol, file, task priority, or responsibility…">
+          <select class="select-input" id="espCatArea">
+            <option value="all">All areas</option>
+            <option value="Boot &amp; System">Boot &amp; System</option>
+            <option value="Stratum &amp; Pools">Stratum &amp; Pools</option>
+            <option value="Mining Pipeline">Mining Pipeline</option>
+            <option value="ASIC Drivers">ASIC Drivers</option>
+            <option value="Power &amp; Thermal">Power &amp; Thermal</option>
+            <option value="HTTP, WS &amp; NVS">HTTP, WS &amp; NVS</option>
+            <option value="Display, BAP &amp; Net">Display, BAP &amp; Net</option>
+          </select>
+          <select class="select-input" id="espCatRole">
+            <option value="all">All roles</option>
+            <option value="surface">Surface</option>
+            <option value="task">Task</option>
+            <option value="contract">Contract</option>
+            <option value="state">State</option>
+            <option value="driver">Driver</option>
+            <option value="infra">Infra</option>
+            <option value="hw">Hardware</option>
+          </select>
+          <select class="select-input" id="espCatScope">
+            <option value="all">All scopes</option>
+            <option value="system">System</option>
+            <option value="board">Board</option>
+            <option value="pool">Pool</option>
+            <option value="job">Job</option>
+          </select>
+          <span class="count-pill" id="espCatCount"></span>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Object / Module</th><th>Area</th><th>Role</th><th>Scope</th><th>Task / Context</th><th>Responsibility &amp; Key Relationships</th></tr>
+            </thead>
+            <tbody id="espCatBody"></tbody>
+          </table>
+        </div>
+
+        <div class="callout">
+          <strong>ESP-Miner architectural takeaway:</strong> Ultra-lean embedded C design optimized for ESP32-S3 DRAM/PSRAM constraints—centralized static <code>GlobalState</code>, fixed priority FreeRTOS tasks, pre-allocated slot rings, and board-config bitfield dispatch.
+        </div>
+      </section>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+const CATALOG = [
+  // Boot & System
+  {name:"app_main()",area:"Boot & System",role:"task",scope:"system",ctx:"Main Boot Task",desc:"Firmware composition root in main/main.c: installs PSRAM abort & cJSON hooks, holds ASIC reset low, confirms OTA, resolves DeviceConfig, starts peripherals/API/BAP/Wi-Fi/SNTP, probes ASICs, and spawns all runtime tasks."},
+  {name:"GlobalState",area:"Boot & System",role:"state",scope:"system",ctx:"Static BSS + PSRAM",desc:"Single static root struct passed by pointer to every FreeRTOS task, HTTP handler, LVGL screen, and BAP service."},
+  {name:"SystemModule",area:"Boot & System",role:"state",scope:"system",ctx:"GlobalState.SYSTEM_MODULE",desc:"Holds hashrate windows, Wi-Fi/IP/mDNS status, pools[8], pool_sessions[8], primary/secondary indices, pause/overheat/fault flags, OTA partition cache, and Scoreboard."},
+  {name:"DeviceConfig / FamilyConfig / AsicConfig",area:"Boot & System",role:"contract",scope:"board",ctx:"main/device_config.h",desc:"Board capability descriptor tables covering 10 Bitaxe families (Max..GammaHex, NajaDuo) and 5 ASIC families (BM1397/66/68/70/73), pins, and I2C IC flags."},
+  {name:"SYSTEM_init_system() / SYSTEM_init_peripherals()",area:"Boot & System",role:"infra",scope:"system",ctx:"main/system.c",desc:"Initializes shared job slots, scoreboard, power/thermal/display peripherals; failure enters degraded mode leaving AxeOS API operational."},
+  {name:"self_test_task / SelfTestModule",area:"Boot & System",role:"task",scope:"board",ctx:"prio 10 · 8 KB PSRAM",desc:"Factory & hardware qualification workflow; bypasses Wi-Fi/HTTP/Stratum, verifies power, fan RPM, and ASIC nonce measurement under pthread_mutex."},
+  {name:"cpu_monitor_task / task_monitor_task",area:"Boot & System",role:"task",scope:"system",ctx:"prio 1 · PSRAM",desc:"Tracks CPU utilization and optional FreeRTOS per-task stack/runtime diagnostics."},
+
+  // Stratum & Pools
+  {name:"stratum_task (Primary) & stratum_fb (Fallback)",area:"Stratum & Pools",role:"task",scope:"pool",ctx:"prio 16 · 16 KB PSRAM",desc:"Supervises up to MAX_POOLS (8). Primary retries 3x (2s), spawns stratum_fb on failover, probes primary every 30s, and terminates fallback via vTaskDelete after primary work handover."},
+  {name:"stratum_driver_t",area:"Stratum & Pools",role:"contract",scope:"pool",ctx:"main/tasks/stratum_driver.h",desc:"Protocol vtable (run, close_connection, abort_connection, submit_share) implemented by g_stratum_v1_driver and g_stratum_v2_driver."},
+  {name:"PoolConfig & PoolSession",area:"Stratum & Pools",role:"state",scope:"pool",ctx:"main/global_state.h · pool.h",desc:"Per-pool configuration (URL, port, protocol, TLS cert, SV2 pubkey) and live session state (share stats, rejected reasons, difficulty, timing tracker, 8-slot miner_job_pool_t)."},
+  {name:"stratum_v1_client.c",area:"Stratum & Pools",role:"driver",scope:"pool",ctx:"s_v1_conn_mutex",desc:"Stratum V1 JSON-RPC client supporting TCP/TLS, active_job_ids ring, and pre-write POOL_timing_record (#2085) under s_v1_conn_mutex."},
+  {name:"stratum_v2_client.c",area:"Stratum & Pools",role:"driver",scope:"pool",ctx:"s_v2_conn_mutex",desc:"Stratum V2 client supporting Standard & Extended mining channels, base58 authority pubkey verification, and pre-write submit timing under s_v2_conn_mutex."},
+  {name:"sv2_noise.c & sv2_protocol.c",area:"Stratum & Pools",role:"driver",scope:"pool",ctx:"components/stratum_v2",desc:"Noise NX encrypted handshake (using libsecp256k1 and SNTP clock_trusted gate) and binary SV2 framing."},
+  {name:"stratum_api.c & yyjson",area:"Stratum & Pools",role:"driver",scope:"pool",ctx:"components/stratum",desc:"Fast Stratum V1 JSON serialization/deserialization and streaming coinbase/merkle parsing."},
+  {name:"stratum_socket.c",area:"Stratum & Pools",role:"infra",scope:"pool",ctx:"components/stratum",desc:"Async TCP/TLS transport wrapper over ESP-IDF esp_transport with connect timeouts and abort support."},
+  {name:"stratum_timing_tracker_t",area:"Stratum & Pools",role:"state",scope:"pool",ctx:"components/stratum/stratum_timing.c",desc:"Tracks submit timestamps keyed by request ID to compute exact share RTT min/max/avg."},
+
+  // Mining Pipeline
+  {name:"create_jobs_task",area:"Mining Pipeline",role:"task",scope:"job",ctx:"prio 20 · 8 KB DRAM",desc:"Highest-priority mining task: wakes on xTaskNotifyWait(pool_idx, slot), applies clean_jobs vs 1000 ms non-clean throttle, rolls SW version & extranonce2, builds and dispatches ASIC jobs."},
+  {name:"ASIC_result_task",area:"Mining Pipeline",role:"task",scope:"job",ctx:"prio 15 · 8 KB DRAM",desc:"Reads UART1 responses via ASIC_process_work(), routes register frames to hashrate_monitor, computes double-SHA256 PoW, submits shares/blocks immediately, then updates Scoreboard."},
+  {name:"miner_job_t & miner_job_pool_t",area:"Mining Pipeline",role:"contract",scope:"pool",ctx:"components/mining_job",desc:"Protocol-normalized pool template with 8 pre-allocated slots per pool and PSRAM-backed coinbase prefix/suffix buffers."},
+  {name:"asic_job_t",area:"Mining Pipeline",role:"contract",scope:"job",ctx:"components/mining_job",desc:"Concrete 80-byte Bitcoin header template (version, prev_hash, merkle_root, ntime, nbits, pool_target, pool_id, job_id, extranonce2) passed to silicon."},
+  {name:"asic_job_store_t",area:"Mining Pipeline",role:"state",scope:"job",ctx:"pthread_mutex_t lock",desc:"Ring buffer mapping ASIC hardware job IDs to asic_job_t entries; lookup copies out a snapshot so later slot reuse cannot corrupt verification."},
+  {name:"mining.c & coinbase_decoder.c",area:"Mining Pipeline",role:"driver",scope:"job",ctx:"components/stratum",desc:"Builds asic_job_t (coinbase/merkle root), computes nonce PoW hash, converts nbits/target/diff, and extracts block height & pool scriptsig tags."},
+  {name:"Scoreboard",area:"Mining Pipeline",role:"state",scope:"system",ctx:"main/tasks/scoreboard.c",desc:"Thread-safe top-shares leaderboard recording best nonce difficulties, job IDs, nonces, and rolled version bits."},
+  {name:"statistics_task",area:"Mining Pipeline",role:"task",scope:"system",ctx:"prio 3 · 8 KB PSRAM",desc:"Samples periodic hashrate, temperature, power, and voltage history for AxeOS charts."},
+
+  // ASIC Drivers
+  {name:"asic.c (ASIC_* Facade)",area:"ASIC Drivers",role:"contract",scope:"board",ctx:"components/asic/asic.c",desc:"Uniform switch-dispatch facade (ASIC_init, send_job, process_work, set_frequency, set_version_mask, set_nonce_space, read_registers) across all 5 BM13xx families."},
+  {name:"BM1397 / BM1366 / BM1368 / BM1370 / BM1373",area:"ASIC Drivers",role:"driver",scope:"board",ctx:"components/asic/bm13*.c",desc:"Chip-specific initialization sequences, PLL setup, ticket mask, and work/register response decoding."},
+  {name:"bm_job_packet.c & bm_job_midstate.c",area:"ASIC Drivers",role:"driver",scope:"job",ctx:"components/asic",desc:"Encodes Bitmain job frames (including 4-midstate packets for BM1397) and computes SHA-256 midstates."},
+  {name:"frequency_transition_bmXX.c & pll.c",area:"ASIC Drivers",role:"driver",scope:"board",ctx:"components/asic",desc:"Smooth stepped PLL frequency ramping and divider calculation to prevent Vcore droop on abrupt clock jumps."},
+  {name:"hashrate_monitor_task & HashrateMonitorModule",area:"ASIC Drivers",role:"task",scope:"board",ctx:"prio 7 · 8 KB PSRAM",desc:"Polls ASIC domain hash counters via ASIC_read_registers() and computes 1m/10m/1h measured hashrate & error percentage."},
+  {name:"serial.c & asic_init.c & asic_reset.c",area:"ASIC Drivers",role:"hw",scope:"board",ctx:"UART_NUM_1 + Reset GPIO",desc:"Configures UART1 baud/buffers, sequences cold-boot & recovery ASIC probing, and controls hardware RST/enable pins."},
+
+  // Power & Thermal
+  {name:"POWER_MANAGEMENT_task & PowerManagementModule",area:"Power & Thermal",role:"task",scope:"board",ctx:"prio 10 · 8 KB DRAM",desc:"100 ms supervisor polling V/I/W and temps, enforcing 90°C ASIC / 145°C VRM limits and undervoltage throttling, and orchestrating mining_stop() / mining_start() on pause/fault/no-pools."},
+  {name:"FAN_CONTROLLER_task & PID.c",area:"Power & Thermal",role:"task",scope:"board",ctx:"prio 8 · 8 KB DRAM",desc:"Drives manual or closed-loop PID fan duty cycle from chip/VRM temperature sensors."},
+  {name:"power.c / vcore.c / thermal.c",area:"Power & Thermal",role:"contract",scope:"board",ctx:"main/power · main/thermal",desc:"Board-flag-driven hardware facades selecting between TPS546, INA260, DS4432U, EMC2101, EMC2103, EMC2302, and TMP1075."},
+  {name:"TPS546.c / INA260.c / DS4432U.c",area:"Power & Thermal",role:"driver",scope:"board",ctx:"I2C_NUM_0 (PMBus/I2C)",desc:"Power regulator and voltage/current sensor drivers; TPS546 uses per-family TPS546_CONFIG_* profiles."},
+  {name:"EMC2101 / EMC2103 / EMC2302 / TMP1075",area:"Power & Thermal",role:"driver",scope:"board",ctx:"I2C_NUM_0",desc:"Fan PWM/tachometer and remote diode / board temperature sensor drivers."},
+  {name:"i2c_bitaxe.c & adc.c",area:"Power & Thermal",role:"hw",scope:"board",ctx:"I2C_NUM_0 · ESP ADC",desc:"Shared ESP-IDF I2C master bus owner and internal ADC reader for Vcore measurement."},
+
+  // HTTP, WS & NVS
+  {name:"http_server.c & system_api_json.c",area:"HTTP, WS & NVS",role:"surface",scope:"system",ctx:"ESP-IDF httpd task",desc:"Serves AxeOS Angular SPA (embedded or SPIFFS custom WWW), REST system/pool/swarm/theme APIs, and OTA firmware/WWW uploads."},
+  {name:"websocket_api_task & websocket_log_task",area:"HTTP, WS & NVS",role:"surface",scope:"system",ctx:"prio 2 · 8 KB PSRAM",desc:"Pushes live JSON telemetry and real-time PSRAM log_buffer streams to connected AxeOS browsers."},
+  {name:"nvs_config.c (nvs_task)",area:"HTTP, WS & NVS",role:"infra",scope:"system",ctx:"prio 4 · 8 KB DRAM",desc:"Central NVS configuration store; queues flash writes onto dedicated nvs_task so HTTP/BAP/BLE callers don't stall on flash erase."},
+  {name:"log_buffer.c (stdout_flush)",area:"HTTP, WS & NVS",role:"infra",scope:"system",ctx:"prio 1 · 4 KB DRAM",desc:"PSRAM ring buffer capturing ESP_LOG output for both UART stdout flushing and WebSocket log streaming."},
+  {name:"filesystem.c & esp_ota_ops",area:"HTTP, WS & NVS",role:"hw",scope:"system",ctx:"SPIFFS + OTA Flash",desc:"Mounts SPIFFS for custom AxeOS bundles and manages dual-slot OTA validation & rollback."},
+
+  // Display, BAP & Net
+  {name:"screen.c & display.c & input.c",area:"Display, BAP & Net",role:"surface",scope:"board",ctx:"LVGL port task",desc:"12-screen LVGL carousel (self-test, overheat, stats, mining, Wi-Fi, logos) refreshed every 500 ms with hardware button wake/navigation."},
+  {name:"bap.c / bap_uart / bap_protocol / bap_handlers / bap_subscription",area:"Display, BAP & Net",role:"surface",scope:"board",ctx:"PSRAM queue + mutexes",desc:"Bitaxe Accessory Protocol over dedicated UART: RX/mode/subscription tasks allowing external displays/controllers to query and mutate miner state."},
+  {name:"connect.c (mdns_init_task)",area:"Display, BAP & Net",role:"infra",scope:"system",ctx:"Wi-Fi Event Loop + prio 5",desc:"Manages Wi-Fi STA association, IPv4/IPv6 acquisition, fallback Config AP with client-hold logic, Wi-Fi scans, and mDNS advertisement."},
+  {name:"dns_server.c",area:"Display, BAP & Net",role:"infra",scope:"system",ctx:"prio 5 · 8 KB PSRAM",desc:"Captive-portal DNS responder active while the miner's configuration AP is up."},
+  {name:"setup_ble.c",area:"Display, BAP & Net",role:"surface",scope:"system",ctx:"NimBLE (5s AP grace)",desc:"Temporary Bluetooth provisioning service started after 5 s in setup AP mode and torn down immediately upon Wi-Fi connection."}
+];
+
+const ROLE_META = {surface:["Surface","b-surface"], task:["Task","b-task"], contract:["Contract","b-contract"], state:["State","b-state"], driver:["Driver","b-driver"], infra:["Infra","b-infra"], hw:["Hardware","b-hw"]};
+
+const catBody = document.getElementById("espCatBody");
+const catSearch = document.getElementById("espCatSearch");
+const catArea = document.getElementById("espCatArea");
+const catRole = document.getElementById("espCatRole");
+const catScope = document.getElementById("espCatScope");
+const catCount = document.getElementById("espCatCount");
+
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+
+function renderCatalog(){
+  const q = catSearch.value.trim().toLowerCase();
+  const a = catArea.value;
+  const r = catRole.value;
+  const sc = catScope.value;
+  const rows = CATALOG.filter(item => {
+    if (a !== "all" && item.area !== a) return false;
+    if (r !== "all" && item.role !== r) return false;
+    if (sc !== "all" && item.scope !== sc) return false;
+    if (q && !(item.name + " " + item.area + " " + item.ctx + " " + item.desc + " " + ROLE_META[item.role][0]).toLowerCase().includes(q)) return false;
+    return true;
+  });
+  catCount.textContent = rows.length + " / " + CATALOG.length + " shown";
+  catBody.innerHTML = rows.map(item => {
+    const [label, cls] = ROLE_META[item.role];
+    return `<tr>
+      <td><code>${esc(item.name)}</code></td>
+      <td style="white-space:nowrap;color:var(--subtle);font-size:12.5px">${esc(item.area)}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+      <td><span class="scope-pill">${esc(item.scope)}</span></td>
+      <td><code>${esc(item.ctx)}</code></td>
+      <td>${esc(item.desc)}</td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="6" style="color:var(--subtle);text-align:center;padding:24px">No matching entries.</td></tr>`;
+}
+catSearch.addEventListener("input", renderCatalog);
+catArea.addEventListener("change", renderCatalog);
+catRole.addEventListener("change", renderCatalog);
+catScope.addEventListener("change", renderCatalog);
+renderCatalog();
+
+document.querySelectorAll(".mermaid[data-diagram]").forEach((el, idx) => {
+  el.dataset.src = el.textContent.trim();
+  el.dataset.id = "mmd-" + idx;
+});
+
+function mermaidConfig(){
+  const dark = document.documentElement.dataset.theme === "dark";
+  return {
+    startOnLoad: false,
+    securityLevel: "loose",
+    theme: dark ? "dark" : "base",
+    themeVariables: dark ? {
+      primaryColor: "#1e293b", primaryTextColor: "#f1f5f9", primaryBorderColor: "#475569",
+      lineColor: "#94a3b8", secondaryColor: "#0f172a", tertiaryColor: "#111827",
+      actorBkg: "#1e293b", actorBorder: "#64748b", actorTextColor: "#f1f5f9",
+      noteBkgColor: "#2a1d0f", noteBorderColor: "#f7931a", noteTextColor: "#fde68a",
+      fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+    } : {
+      primaryColor: "#ffffff", primaryTextColor: "#0f172a", primaryBorderColor: "#94a3b8",
+      lineColor: "#475569", secondaryColor: "#f8fafc", tertiaryColor: "#f1f5f9",
+      actorBkg: "#ffffff", actorBorder: "#64748b", actorTextColor: "#0f172a",
+      noteBkgColor: "#fff7ed", noteBorderColor: "#f7931a", noteTextColor: "#7c2d12",
+      fontFamily: "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif"
+    },
+    flowchart: { htmlLabels: true, curve: "basis", padding: 14, nodeSpacing: 34, rankSpacing: 44 },
+    sequence: { mirrorActors: false, actorMargin: 40, messageMargin: 30, boxMargin: 10, useMaxWidth: true }
+  };
+}
+
+let renderSeq = 0;
+async function renderVisibleDiagrams(force){
+  if (typeof mermaid === "undefined") return;
+  mermaid.initialize(mermaidConfig());
+  const nodes = document.querySelectorAll(".panel.active .mermaid[data-diagram]");
+  const themeKey = document.documentElement.dataset.theme || "light";
+  for (const el of nodes) {
+    if (!force && el.dataset.rendered === themeKey) continue;
+    try {
+      const { svg } = await mermaid.render(el.dataset.id + "-" + (++renderSeq), el.dataset.src);
+      el.innerHTML = svg;
+      el.dataset.rendered = themeKey;
+    } catch (e) {
+      el.innerHTML = "<pre><code>" + esc(el.dataset.src) + "</code></pre>";
+    }
+  }
+}
+
+document.querySelectorAll(".tabs").forEach(group => {
+  group.addEventListener("click", e => {
+    const btn = e.target.closest(".tab");
+    if (!btn) return;
+    const targetId = btn.dataset.target;
+    group.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b === btn));
+    const sec = group.closest("section");
+    sec.querySelectorAll(".panel").forEach(p => p.classList.toggle("active", p.id === targetId));
+    renderVisibleDiagrams(false);
+  });
+});
+
+const themeBtn = document.getElementById("themeToggle");
+function applyTheme(theme){
+  if (theme === "dark") {
+    document.documentElement.dataset.theme = "dark";
+    themeBtn.textContent = "Switch to Light Theme";
+  } else {
+    delete document.documentElement.dataset.theme;
+    themeBtn.textContent = "Switch to Dark Theme";
+  }
+  try { localStorage.setItem("esp-miner-model-theme", theme); } catch {}
+  renderVisibleDiagrams(true);
+}
+themeBtn.addEventListener("click", () => {
+  applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
+});
+try {
+  const saved = localStorage.getItem("esp-miner-model-theme");
+  if (saved === "dark" || (!saved && matchMedia("(prefers-color-scheme: dark)").matches)) applyTheme("dark");
+} catch {}
+
+const navLinks = [...document.querySelectorAll("#sideNav a")];
+const sections = navLinks.map(a => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+if (navLinks[0]) navLinks[0].classList.add("active");
+const obs = new IntersectionObserver(entries => {
+  for (const entry of entries) {
+    if (entry.isIntersecting) {
+      navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href") === "#" + entry.target.id));
+    }
+  }
+}, { rootMargin: "-15% 0px -70% 0px" });
+sections.forEach(s => obs.observe(s));
+
+window.addEventListener("load", () => renderVisibleDiagrams(true));
+</script>
+</body>
+</html>
